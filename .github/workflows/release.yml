@@ -15,10 +15,13 @@ jobs:
         include:
           - os: ubuntu-latest
             suffix: linux
+            data_sep: ':'
           - os: windows-latest
             suffix: win.exe
+            data_sep: ';'
           - os: macos-latest
             suffix: macos
+            data_sep: ':'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -26,9 +29,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install deps
-        run: pip install pyinstaller faster-whisper
-      - name: Build
-        run: pyinstaller --onefile --name autosub-${{ matrix.suffix }} autosub.py
+        run: pip install pyinstaller faster-whisper customtkinter
+      - name: Download tiny model (bundled)
+        run: python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', download_root='./models')"
+      - name: Build CLI
+        run: pyinstaller --onefile --name autosub-${{ matrix.suffix }} --add-data "models${{ matrix.data_sep }}models" autosub.py
+      - name: Build GUI
+        run: pyinstaller --onefile --windowed --name autosub-gui-${{ matrix.suffix }} --add-data "models${{ matrix.data_sep }}models" autosub_gui.py
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
