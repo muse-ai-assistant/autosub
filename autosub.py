@@ -134,10 +134,31 @@ def main():
         out = f'{base}.{args.format}'
 
     model_size = MODEL_SIZES.get(args.model, '')
-    print(f'加载模型 {args.model}（{model_size}），首次运行会自动下载到 {CACHE_DIR} …',
-          flush=True)
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    model = WhisperModel(args.model, device=args.device,
+
+    # 打包版自带 tiny 模型：优先用内置的，无需下载
+    model_path = args.model
+    bundled = None
+    if getattr(sys, 'frozen', False):
+        base = getattr(sys, '_MEIPASS', '')
+        cand = os.path.join(base, 'models', 'models--Systran--faster-whisper-tiny')
+        # 兼容直接放 snapshot 的结构
+        if os.path.isdir(cand):
+            # 找 snapshot 下的实际模型目录
+            snaps = os.path.join(cand, 'snapshots')
+            if os.path.isdir(snaps):
+                subs = os.listdir(snaps)
+                if subs:
+                    bundled = os.path.join(snaps, subs[0])
+            else:
+                bundled = cand
+    if bundled and args.model == 'tiny':
+        print(f'使用内置模型 tiny（{model_size}），无需下载', flush=True)
+        model_path = bundled
+    else:
+        print(f'加载模型 {args.model}（{model_size}），首次运行会自动下载到 {CACHE_DIR} …',
+              flush=True)
+        os.makedirs(CACHE_DIR, exist_ok=True)
+    model = WhisperModel(model_path, device=args.device,
                          download_root=CACHE_DIR)
 
     print('提取音频…', flush=True)
