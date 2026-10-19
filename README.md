@@ -1,5 +1,8 @@
 # autosub 🎙️
 
+> 🌐 **在线体验（免安装）**：https://muse-ai-assistant.github.io/autosub/web/
+> 纯浏览器本地转录，不上传文件，手机/电脑都能用。
+
 Auto-generate subtitles from video/audio speech. Chinese-first, powered by faster-whisper. Runs on CPU, fully offline after the first model download.
 
 自动识别视频/音频中的语音生成字幕（中文为主），基于 faster-whisper，CPU 可跑，模型下载后纯离线。
@@ -30,6 +33,12 @@ pip install -r requirements.txt
 > 首次运行时会自动下载语音模型到 `~/.cache/autosub/`（tiny ~75MB / base ~150MB / small ~500MB / medium ~1.5GB）。
 
 ## 用法 / Usage
+
+### 网页版（免安装，手机/电脑浏览器直接用）/ Web
+
+https://muse-ai-assistant.github.io/autosub/web/
+
+打开 → 选视频/音频文件 → 点「开始转录」→ 下载 srt/vtt/txt。AI 模型首次加载需下载（tiny 约 86MB），转录全程本机运行不上传。
 
 ### 图形界面（推荐，不用记命令）/ GUI
 

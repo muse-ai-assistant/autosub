@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>autosub · 视频语音转字幕</title>
+<meta name="description" content="Auto-generate subtitles from video speech, 100% in your browser. 视频语音自动识别生成字幕，纯浏览器本地运行，不上传。">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a73e8">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root { --blue:#1a73e8; --bg:#f6f8fb; --card:#fff; --txt:#202124; --muted:#5f6368; --line:#e0e3e7; --green:#188038; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--txt); min-height:100vh; display:flex; flex-direction:column; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:10; }
+  header .logo { font-size:22px; }
+  header h1 { font-size:17px; font-weight:700; }
+  header .sub { font-size:12px; color:var(--muted); }
+  header .spacer { flex:1; }
+  #langBtn { border:1px solid var(--line); background:#fff; border-radius:20px; padding:6px 14px; font-size:13px; cursor:pointer; color:var(--txt); }
+  #langBtn:hover { border-color:var(--blue); color:var(--blue); }
+  main { flex:1; max-width:860px; width:100%; margin:0 auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h2 { font-size:14px; font-weight:700; margin-bottom:10px; }
+  #drop { border:2px dashed var(--line); border-radius:12px; padding:36px 20px; text-align:center; cursor:pointer; transition:.2s; }
+  #drop:hover, #drop.over { border-color:var(--blue); background:#f0f6ff; }
+  #drop .big { font-size:40px; margin-bottom:8px; }
+  #drop .t { font-size:15px; font-weight:600; }
+  #drop .s { font-size:12px; color:var(--muted); margin-top:6px; }
+  #fileInfo { display:none; margin-top:10px; font-size:13px; color:var(--muted); text-align:center; }
+  #fileInfo b { color:var(--txt); }
+  .opts { display:flex; gap:18px; flex-wrap:wrap; align-items:center; font-size:14px; }
+  .opts .grp { display:flex; align-items:center; gap:8px; }
+  .opts label { color:var(--muted); font-size:13px; }
+  .opts select { border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:14px; background:#fff; color:var(--txt); }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .btn { border:0; border-radius:24px; padding:12px 30px; font-size:15px; font-weight:600; cursor:pointer; }
+  .btn-primary { background:var(--blue); color:#fff; box-shadow:0 2px 8px rgba(26,115,232,.35); }
+  .btn-primary:hover:not(:disabled) { background:#1765cc; }
+  .btn-ghost { background:#fff; color:var(--txt); border:1px solid var(--line); padding:9px 20px; font-size:14px; }
+  .btn-ghost:hover:not(:disabled) { border-color:var(--blue); color:var(--blue); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .prog { display:none; }
+  .prog.show { display:block; }
+  .bar { height:8px; background:#e8eaed; border-radius:4px; overflow:hidden; margin-top:8px; }
+  .bar > div { height:100%; background:var(--blue); width:0%; border-radius:4px; transition:width .3s; }
+  #status { font-size:13px; color:var(--muted); margin-top:8px; }
+  #results { display:none; }
+  #results.show { display:block; }
+  .seg { padding:8px 0; border-bottom:1px solid #f1f3f4; font-size:14px; line-height:1.6; }
+  .seg:last-child { border-bottom:0; }
+  .seg .ts { color:var(--blue); font-size:12px; font-family:ui-monospace,monospace; margin-right:8px; }
+  .note { font-size:12px; color:var(--muted); line-height:1.8; }
+  .note b { color:var(--txt); }
+  footer { text-align:center; padding:14px; font-size:12px; color:var(--muted); }
+  footer a { color:var(--blue); text-decoration:none; }
+  #err { display:none; background:#fce8e6; border:1px solid #f5c6cb; color:#a50e0e; border-radius:10px; padding:10px 16px; font-size:13px; line-height:1.7; }
+  #err.show { display:block; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">🎙️</span>
+  <div>
+    <h1 data-i18n="title">autosub · 视频语音转字幕</h1>
+    <div class="sub" data-i18n="subtitle">浏览器本地识别，不上传文件 · 100% private, runs in your browser</div>
+  </div>
+  <span class="spacer"></span>
+  <button id="langBtn">EN</button>
+</header>
+<main>
+  <div class="card">
+    <div id="drop">
+      <div class="big">📁</div>
+      <div class="t" data-i18n="dropT">点击选择 或 拖拽视频/音频文件到这里</div>
+      <div class="s" data-i18n="dropS">支持 mp4 / mkv / mov / mp3 / wav / m4a 等</div>
+      <input type="file" id="file" accept="video/*,audio/*" style="display:none">
+    </div>
+    <div id="fileInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="optTitle">⚙️ 识别设置</h2>
+    <div class="opts">
+      <div class="grp">
+        <label data-i18n="modelL">模型</label>
+        <select id="model">
+          <option value="Xenova/whisper-tiny" data-i18n="mTiny">tiny（最快 · 约86MB）</option>
+          <option value="Xenova/whisper-base" data-i18n="mBase">base（更准 · 约145MB）</option>
+        </select>
+      </div>
+      <div class="grp">
+        <label data-i18n="langL">语言</label>
+        <select id="lang">
+          <option value="chinese" data-i18n="lZh">中文</option>
+          <option value="english" data-i18n="lEn">英文</option>
+          <option value="auto" data-i18n="lAuto">自动检测</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn btn-primary" id="goBtn" disabled data-i18n="goBtn">▶ 开始转录</button>
+  </div>
+
+  <div class="card prog" id="progCard">
+    <h2 data-i18n="progT">⏳ 处理中</h2>
+    <div class="bar"><div id="bar"></div></div>
+    <div id="status"></div>
+  </div>
+
+  <div id="err"></div>
+
+  <div class="card" id="results">
+    <h2><span data-i18n="resT">📝 识别结果</span> <span id="segCount" style="font-weight:400;color:var(--muted);font-size:12px;"></span></h2>
+    <div id="segList" style="max-height:320px;overflow-y:auto;margin-bottom:12px;"></div>
+    <div class="toolbar">
+      <button class="btn btn-ghost" id="dlSrt">⬇ SRT</button>
+      <button class="btn btn-ghost" id="dlVtt">⬇ VTT</button>
+      <button class="btn btn-ghost" id="dlTxt">⬇ TXT</button>
+      <button class="btn btn-ghost" id="copyBtn" data-i18n="copyBtn">📋 复制文本</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="note" data-i18n="note">
+      <b>说明：</b>首次使用需下载 AI 模型（tiny 约 86MB），之后浏览器会缓存。音频在<b>本机</b>转录，不上传服务器。<br>
+      手机浏览器内存有限，长视频建议分段处理或使用桌面版。需要离线/批量处理请用 <a href="https://github.com/muse-ai-assistant/autosub" target="_blank">桌面版 autosub</a>。
+    </div>
+  </div>
+</main>
+<footer>
+  <span data-i18n="foot">开源 MIT · 模型: OpenAI Whisper (via transformers.js)</span> ·
+  <a href="https://github.com/muse-ai-assistant/autosub" target="_blank">GitHub</a>
+</footer>
+
+<script type="module">
+import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+
+/* ---------- i18n ---------- */
+const I18N = {
+  zh: {
+    title: "autosub · 视频语音转字幕", subtitle: "浏览器本地识别，不上传文件 · 100% private, runs in your browser",
+    dropT: "点击选择 或 拖拽视频/音频文件到这里", dropS: "支持 mp4 / mkv / mov / mp3 / wav / m4a 等",
+    optTitle: "⚙️ 识别设置", modelL: "模型", mTiny: "tiny（最快 · 约86MB）", mBase: "base（更准 · 约145MB）",
+    langL: "语言", lZh: "中文", lEn: "英文", lAuto: "自动检测",
+    goBtn: "▶ 开始转录", progT: "⏳ 处理中", resT: "📝 识别结果", copyBtn: "📋 复制文本",
+    foot: "开源 MIT · 模型: OpenAI Whisper (via transformers.js)",
+    stModel: "正在下载 AI 模型…", stAudio: "正在提取音频…", stTrans: "正在识别语音…",
+    stDone: "✅ 完成", errNoFile: "请先选择视频/音频文件", errAudio: "音频提取失败，请换个文件试试",
+    errModel: "模型加载失败，请检查网络后重试", segs: "条字幕", copied: "已复制",
+    note: "<b>说明：</b>首次使用需下载 AI 模型（tiny 约 86MB），之后浏览器会缓存。音频在<b>本机</b>转录，不上传服务器。<br>手机浏览器内存有限，长视频建议分段处理或使用桌面版。需要离线/批量处理请用 <a href=\"https://github.com/muse-ai-assistant/autosub\" target=\"_blank\">桌面版 autosub</a>。",
+  },
+  en: {
+    title: "autosub · Video Speech to Subtitles", subtitle: "Transcribe locally in your browser · 浏览器本地识别，不上传",
+    dropT: "Click or drag & drop a video/audio file here", dropS: "Supports mp4 / mkv / mov / mp3 / wav / m4a, etc.",
+    optTitle: "⚙️ Settings", modelL: "Model", mTiny: "tiny (fastest · ~86MB)", mBase: "base (better · ~145MB)",
+    langL: "Language", lZh: "Chinese", lEn: "English", lAuto: "Auto-detect",
+    goBtn: "▶ Transcribe", progT: "⏳ Processing", resT: "📝 Results", copyBtn: "📋 Copy text",
+    foot: "MIT open source · Model: OpenAI Whisper (via transformers.js)",
+    stModel: "Downloading AI model…", stAudio: "Extracting audio…", stTrans: "Transcribing speech…",
+    stDone: "✅ Done", errNoFile: "Please select a video/audio file first", errAudio: "Audio extraction failed, try another file",
+    errModel: "Model loading failed, check your network and retry", segs: "segments", copied: "Copied",
+    note: "<b>Note:</b> The AI model (~86MB for tiny) downloads on first use, then cached by the browser. Audio is transcribed <b>on-device</b>, never uploaded.<br>Mobile browsers have limited memory; split long videos or use the <a href=\"https://github.com/muse-ai-assistant/autosub\" target=\"_blank\">desktop autosub</a> for offline/batch work.",
+  }
+};
+let lang = "zh";
+const $ = (id) => document.getElementById(id);
+function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const k = el.getAttribute("data-i18n");
+    if (I18N[lang][k] !== undefined) el.innerHTML = I18N[lang][k];
+  });
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  $("langBtn").textContent = lang === "zh" ? "EN" : "中文";
+}
+$("langBtn").onclick = () => { lang = lang === "zh" ? "en" : "zh"; applyI18n(); };
+applyI18n();
+
+/* ---------- file ---------- */
+let file = null;
+const drop = $("drop"), fileInput = $("file");
+drop.onclick = () => fileInput.click();
+["dragover", "dragenter"].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (ev) => { if (ev.dataTransfer.files.length) setFile(ev.dataTransfer.files[0]); });
+fileInput.onchange = () => { if (fileInput.files.length) setFile(fileInput.files[0]); };
+function setFile(f) {
+  file = f;
+  $("fileInfo").style.display = "block";
+  $("fileInfo").innerHTML = `<b>${esc(f.name)}</b> · ${(f.size / 1048576).toFixed(1)} MB`;
+  $("goBtn").disabled = false;
+  $("results").classList.remove("show");
+}
+function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+/* ---------- transcribe ---------- */
+let transcriber = null, transcriberModel = "";
+let segments = [];
+
+function showErr(msg) { const e = $("err"); e.textContent = msg; e.classList.add("show"); setTimeout(() => e.classList.remove("show"), 6000); }
+function setProg(pct, txt) { $("progCard").classList.add("show"); $("bar").style.width = pct + "%"; if (txt) $("status").textContent = txt; }
+
+$("goBtn").onclick = async () => {
+  if (!file) { showErr(I18N[lang].errNoFile); return; }
+  $("goBtn").disabled = true;
+  $("results").classList.remove("show");
+  try {
+    const modelId = $("model").value;
+    if (!transcriber || transcriberModel !== modelId) {
+      setProg(2, I18N[lang].stModel);
+      transcriber = await pipeline("automatic-speech-recognition", modelId, {
+        progress_callback: (d) => {
+          if (d.status === "progress" && d.progress != null)
+            setProg(Math.round(d.progress), `${I18N[lang].stModel} ${Math.round(d.progress)}%`);
+        },
+      });
+      transcriberModel = modelId;
+    }
+    setProg(8, I18N[lang].stAudio);
+    const pcm = await extractAudio(file);
+    setProg(12, I18N[lang].stTrans);
+    const langSel = $("lang").value;
+    const opts = { return_timestamps: true, chunk_length_s: 30, stride_length_s: 5 };
+    if (langSel !== "auto") { opts.language = langSel; opts.task = "transcribe"; }
+    const out = await transcriber(pcm, {
+      ...opts,
+      callback_function: (beams) => {
+        // 粗略进度：已解码 token 数无法直接得，用 chunk 回调近似
+      },
+    });
+    segments = (out.chunks || []).map((c) => ({
+      start: c.timestamp[0] ?? 0, end: c.timestamp[1] ?? 0, text: (c.text || "").trim(),
+    })).filter((s) => s.text);
+    setProg(100, `${I18N[lang].stDone} · ${segments.length} ${I18N[lang].segs}`);
+    renderResults();
+  } catch (e) {
+    console.error(e);
+    showErr(/fetch|network|load/i.test(String(e && e.message)) ? I18N[lang].errModel : I18N[lang].errAudio);
+  } finally {
+    $("goBtn").disabled = false;
+  }
+};
+
+async function extractAudio(f) {
+  const ctx = new AudioContext({ sampleRate: 16000 });
+  try {
+    const buf = await f.arrayBuffer();
+    const audioBuf = await ctx.decodeAudioData(buf);
+    return audioBuf.getChannelData(0);
+  } finally {
+    ctx.close();
+  }
+}
+
+/* ---------- results & download ---------- */
+function fmtSrt(t) {
+  const ms = Math.max(0, Math.round(t * 1000));
+  const h = String(Math.floor(ms / 3600000)).padStart(2, "0"),
+        m = String(Math.floor(ms / 60000) % 60).padStart(2, "0"),
+        s = String(Math.floor(ms / 1000) % 60).padStart(2, "0"),
+        x = String(ms % 1000).padStart(3, "0");
+  return `${h}:${m}:${s},${x}`;
+}
+function fmtVtt(t) { return fmtSrt(t).replace(",", "."); }
+
+function renderResults() {
+  const list = $("segList");
+  list.innerHTML = segments.map((s) =>
+    `<div class="seg"><span class="ts">${fmtSrt(s.start)} → ${fmtSrt(s.end)}</span>${esc(s.text)}</div>`
+  ).join("");
+  $("segCount").textContent = `· ${segments.length} ${I18N[lang].segs}`;
+  $("results").classList.add("show");
+}
+function download(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const baseName = () => (file ? file.name.replace(/\.[^.]+$/, "") : "subtitles");
+$("dlSrt").onclick = () => download(baseName() + ".srt",
+  segments.map((s, i) => `${i + 1}\n${fmtSrt(s.start)} --> ${fmtSrt(s.end)}\n${s.text}\n`).join("\n"));
+$("dlVtt").onclick = () => download(baseName() + ".vtt",
+  "WEBVTT\n\n" + segments.map((s) => `${fmtVtt(s.start)} --> ${fmtVtt(s.end)}\n${s.text}\n`).join("\n"));
+$("dlTxt").onclick = () => download(baseName() + ".txt", segments.map((s) => s.text).join("\n"));
+$("copyBtn").onclick = async () => {
+  await navigator.clipboard.writeText(segments.map((s) => s.text).join("\n"));
+  $("copyBtn").textContent = "✅ " + I18N[lang].copied;
+  setTimeout(applyI18n, 1500);
+};
+</script>
+</body>
+</html>
