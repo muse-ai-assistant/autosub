@@ -29,7 +29,7 @@ CACHE_DIR = os.path.expanduser('~/.cache/autosub')
 
 def check_ffmpeg():
     if not shutil.which('ffmpeg'):
-        sys.exit(
+        raise RuntimeError(
             '缺少 ffmpeg，请先安装：\n'
             '  Ubuntu/Debian: sudo apt install ffmpeg\n'
             '  macOS: brew install ffmpeg\n'
@@ -49,7 +49,7 @@ def extract_audio(video_path):
     ]
     r = subprocess.run(cmd)
     if r.returncode != 0 or not os.path.exists(wav):
-        sys.exit('音频提取失败，请确认文件是有效的视频/音频')
+        raise RuntimeError('音频提取失败，请确认文件是有效的视频/音频')
     return wav
 
 
@@ -68,7 +68,7 @@ def load_wav_array(wav_path):
         ch = w.getnchannels()
         sw = w.getsampwidth()
     if sr != 16000 or ch != 1 or sw != 2:
-        sys.exit(f'音频格式异常: {sr}Hz/{ch}ch/{sw*8}bit，应为 16000Hz 单声道 16bit')
+        raise RuntimeError(f'音频格式异常: {sr}Hz/{ch}ch/{sw*8}bit，应为 16000Hz 单声道 16bit')
     audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
     return audio
 
@@ -102,6 +102,78 @@ def write_txt(segments, path):
             f.write(seg.text.strip() + '\n')
 
 
+def resolve_model_path(model_name, cache_dir=CACHE_DIR):
+    """返回 (model_path, is_bundled)。打包版自带 tiny 模型时直接用内置路径。"""
+    if getattr(sys, 'frozen', False) and model_name == 'tiny':
+        base = getattr(sys, '_MEIPASS', '')
+        cand = os.path.join(base, 'models', 'models--Systran--faster-whisper-tiny')
+        if os.path.isdir(cand):
+            snaps = os.path.join(cand, 'snapshots')
+            if os.path.isdir(snaps):
+                subs = os.listdir(snaps)
+                if subs:
+                    return os.path.join(snaps, subs[0]), True
+            return cand, True
+    return model_name, False
+
+
+def transcribe_file(input_path, lang='zh', model='small', fmt='srt',
+                    device='cpu', output=None, progress=None):
+    """核心转录逻辑（CLI 与 GUI 共用）。
+
+    progress: 可选回调 progress(text)，用于报告状态。
+    返回 (输出字幕路径, 字幕条数)。
+    """
+    def say(msg):
+        if progress:
+            progress(msg)
+
+    if not os.path.isfile(input_path):
+        raise FileNotFoundError(f'找不到文件: {input_path}')
+
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        raise RuntimeError('缺少依赖，请先运行: pip install -r requirements.txt')
+
+    if not output:
+        output = f'{os.path.splitext(input_path)[0]}.{fmt}'
+
+    model_size = MODEL_SIZES.get(model, '')
+    model_path, is_bundled = resolve_model_path(model)
+    if is_bundled:
+        say(f'使用内置模型 tiny（{model_size}），无需下载')
+    else:
+        say(f'加载模型 {model}（{model_size}），首次运行会自动下载到 {CACHE_DIR} …')
+        os.makedirs(CACHE_DIR, exist_ok=True)
+    wm = WhisperModel(model_path, device=device, download_root=CACHE_DIR)
+
+    say('提取音频…')
+    wav = extract_audio(input_path)
+    try:
+        say('识别中…')
+        audio = load_wav_array(wav)
+        segments, info = wm.transcribe(audio, language=lang, beam_size=5)
+        segments = list(segments)
+        say(f'检测到语言: {info.language}'
+            f'（置信度 {info.language_probability:.2f}），共 {len(segments)} 条字幕')
+    finally:
+        os.unlink(wav)
+
+    if not segments:
+        raise RuntimeError('未识别出任何语音')
+
+    if fmt == 'vtt':
+        write_vtt(segments, output)
+    elif fmt == 'txt':
+        write_txt(segments, output)
+    else:
+        write_srt(segments, output)
+
+    say(f'字幕已保存: {output}')
+    return output, len(segments)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description='自动识别视频/音频中的语音，生成字幕（中文为主）')
@@ -118,72 +190,21 @@ def main():
                     help='运行设备，默认 cpu')
     args = ap.parse_args()
 
-    if not os.path.isfile(args.input):
-        sys.exit(f'找不到文件: {args.input}')
+    try:
+        check_ffmpeg()
+    except RuntimeError as e:
+        sys.exit(str(e))
 
-    check_ffmpeg()
+    def say(msg):
+        print(msg, flush=True)
 
     try:
-        from faster_whisper import WhisperModel
-    except ImportError:
-        sys.exit('缺少依赖，请先运行: pip install -r requirements.txt')
-
-    out = args.output
-    if not out:
-        base = os.path.splitext(args.input)[0]
-        out = f'{base}.{args.format}'
-
-    model_size = MODEL_SIZES.get(args.model, '')
-
-    # 打包版自带 tiny 模型：优先用内置的，无需下载
-    model_path = args.model
-    bundled = None
-    if getattr(sys, 'frozen', False):
-        base = getattr(sys, '_MEIPASS', '')
-        cand = os.path.join(base, 'models', 'models--Systran--faster-whisper-tiny')
-        # 兼容直接放 snapshot 的结构
-        if os.path.isdir(cand):
-            # 找 snapshot 下的实际模型目录
-            snaps = os.path.join(cand, 'snapshots')
-            if os.path.isdir(snaps):
-                subs = os.listdir(snaps)
-                if subs:
-                    bundled = os.path.join(snaps, subs[0])
-            else:
-                bundled = cand
-    if bundled and args.model == 'tiny':
-        print(f'使用内置模型 tiny（{model_size}），无需下载', flush=True)
-        model_path = bundled
-    else:
-        print(f'加载模型 {args.model}（{model_size}），首次运行会自动下载到 {CACHE_DIR} …',
-              flush=True)
-        os.makedirs(CACHE_DIR, exist_ok=True)
-    model = WhisperModel(model_path, device=args.device,
-                         download_root=CACHE_DIR)
-
-    print('提取音频…', flush=True)
-    wav = extract_audio(args.input)
-    try:
-        print('识别中…', flush=True)
-        audio = load_wav_array(wav)
-        segments, info = model.transcribe(audio, language=args.lang, beam_size=5)
-        segments = list(segments)
-        print(f'检测到语言: {info.language}（置信度 {info.language_probability:.2f}），'
-              f'共 {len(segments)} 条字幕', flush=True)
-    finally:
-        os.unlink(wav)
-
-    if not segments:
-        sys.exit('未识别出任何语音')
-
-    if args.format == 'vtt':
-        write_vtt(segments, out)
-    elif args.format == 'txt':
-        write_txt(segments, out)
-    else:
-        write_srt(segments, out)
-
-    print(f'字幕已保存: {out}')
+        out, n = transcribe_file(
+            args.input, lang=args.lang, model=args.model, fmt=args.format,
+            device=args.device, output=args.output, progress=say)
+    except (FileNotFoundError, RuntimeError) as e:
+        sys.exit(str(e))
+    print(f'完成，共 {n} 条字幕: {out}')
 
 
 if __name__ == '__main__':

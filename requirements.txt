@@ -1,2 +1,3 @@
 faster-whisper
 av>=12
+customtkinter

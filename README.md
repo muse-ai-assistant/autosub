@@ -31,6 +31,16 @@ pip install -r requirements.txt
 
 ## 用法 / Usage
 
+### 图形界面（推荐，不用记命令）/ GUI
+
+```bash
+python autosub_gui.py
+```
+
+选文件 → 选模型/语言/格式 → 点「开始生成字幕」，完成后点「打开所在文件夹」取字幕。
+
+### 命令行 / CLI
+
 ```bash
 # 基本：video.mp4 -> video.srt（中文）
 autosub video.mp4

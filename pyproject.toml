@@ -5,10 +5,11 @@ description = "Auto-generate subtitles from video/audio speech (Chinese-first) w
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-dependencies = ["faster-whisper"]
+dependencies = ["faster-whisper", "customtkinter"]
 
 [project.scripts]
 autosub = "autosub:main"
+autosub-gui = "autosub_gui:main"
 
 [build-system]
 requires = ["setuptools"]
