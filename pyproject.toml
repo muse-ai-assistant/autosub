@@ -1,0 +1,15 @@
+[project]
+name = "autosub"
+version = "1.0.0"
+description = "Auto-generate subtitles from video/audio speech (Chinese-first) with faster-whisper"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["faster-whisper"]
+
+[project.scripts]
+autosub = "autosub:main"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
