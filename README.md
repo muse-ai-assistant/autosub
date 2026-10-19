@@ -23,6 +23,10 @@ brew install ffmpeg
 pip install -r requirements.txt
 ```
 
+> 📦 **开箱即用**：不想装 Python 的直接下载单文件版
+> https://github.com/muse-ai-assistant/autosub/releases/latest
+> （仍需系统安装 ffmpeg；首次运行自动下载语音模型）
+
 > 首次运行时会自动下载语音模型到 `~/.cache/autosub/`（tiny ~75MB / base ~150MB / small ~500MB / medium ~1.5GB）。
 
 ## 用法 / Usage
